@@ -8,8 +8,6 @@ android {
 		applicationId 'net.minetest.minetest'
 		minSdkVersion 21
 		targetSdkVersion 33
-		versionName "${versionMajor}.${versionMinor}.${versionPatch}"
-		versionCode project.versionCode
 	}
 
 	// load properties

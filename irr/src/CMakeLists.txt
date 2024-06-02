@@ -242,7 +242,7 @@ if(USE_SDL2)
 	# unfortunately older SDL does not provide its version to cmake, so check header.
 	set(CMAKE_REQUIRED_INCLUDES ${SDL2_INCLUDE_DIRS})
 	unset(CHECK_SDL_VERSION CACHE)
-	check_cxx_source_compiles("#include <SDL_version.h>\n\
+	check_cxx_source_compiles("#include <SDL2_version.h>\n\
 #if !SDL_VERSION_ATLEAST(2, 0, 10)\n\
 #error\n\
 #endif\n\
