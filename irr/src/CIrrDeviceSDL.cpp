@@ -463,13 +463,7 @@ bool CIrrDeviceSDL::createWindowWithContext()
 {
 	u32 SDL_Flags = 0;
 
-	if (CreationParams.Fullscreen) {
-#ifdef _IRR_EMSCRIPTEN_PLATFORM_
-		SDL_Flags |= SDL_WINDOW_FULLSCREEN;
-#else
-		SDL_Flags |= SDL_WINDOW_FULLSCREEN_DESKTOP;
-#endif
-	}
+	SDL_Flags |= getFullscreenFlag(CreationParams.Fullscreen);
 	if (Resizable)
 		SDL_Flags |= SDL_WINDOW_RESIZABLE;
 	if (CreationParams.WindowMaximized)
@@ -673,6 +667,7 @@ bool CIrrDeviceSDL::run()
 #else
 			irrevent.MouseInput.Wheel = SDL_event.wheel.y;
 #endif
+			irrevent.MouseInput.ButtonStates = MouseButtonStates;
 			irrevent.MouseInput.Shift = (keymod & KMOD_SHIFT) != 0;
 			irrevent.MouseInput.Control = (keymod & KMOD_CTRL) != 0;
 			irrevent.MouseInput.X = MouseX;
@@ -887,6 +882,14 @@ bool CIrrDeviceSDL::run()
 
 		case SDL_APP_WILLENTERFOREGROUND:
 			IsInBackground = false;
+			break;
+
+		case SDL_RENDER_TARGETS_RESET:
+			os::Printer::log("Received SDL_RENDER_TARGETS_RESET. Rendering is probably broken.", ELL_ERROR);
+			break;
+
+		case SDL_RENDER_DEVICE_RESET:
+			os::Printer::log("Received SDL_RENDER_DEVICE_RESET. Rendering is probably broken.", ELL_ERROR);
 			break;
 
 		default:
@@ -1157,12 +1160,35 @@ bool CIrrDeviceSDL::isWindowMaximized() const
 
 bool CIrrDeviceSDL::isFullscreen() const
 {
-#ifdef _IRR_EMSCRIPTEN_PLATFORM_
-	return SDL_GetWindowFlags(0) == SDL_WINDOW_FULLSCREEN;
-#else
+	if (!Window)
+		return false;
+	u32 flags = SDL_GetWindowFlags(Window);
+	return (flags & SDL_WINDOW_FULLSCREEN) != 0 ||
+			(flags & SDL_WINDOW_FULLSCREEN_DESKTOP) != 0;
+}
 
-	return CIrrDeviceStub::isFullscreen();
+u32 CIrrDeviceSDL::getFullscreenFlag(bool fullscreen)
+{
+	if (!fullscreen)
+		return 0;
+#ifdef _IRR_EMSCRIPTEN_PLATFORM_
+	return SDL_WINDOW_FULLSCREEN;
+#else
+	return SDL_WINDOW_FULLSCREEN_DESKTOP;
 #endif
+}
+
+bool CIrrDeviceSDL::setFullscreen(bool fullscreen)
+{
+	if (!Window)
+		return false;
+	// The SDL wiki says that this may trigger SDL_RENDER_TARGETS_RESET, but
+	// looking at the SDL source, this only happens with D3D, so it's not
+	// relevant to us.
+	bool success = SDL_SetWindowFullscreen(Window, getFullscreenFlag(fullscreen)) == 0;
+	if (!success)
+		os::Printer::log("SDL_SetWindowFullscreen failed", SDL_GetError(), ELL_ERROR);
+	return success;
 }
 
 bool CIrrDeviceSDL::isWindowVisible() const
