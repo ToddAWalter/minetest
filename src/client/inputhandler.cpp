@@ -94,7 +94,6 @@ void KeyCache::populate()
 			handler->listenForKey(k);
 		}
 		handler->listenForKey(EscapeKey);
-		handler->listenForKey(CancelKey);
 	}
 }
 
@@ -114,13 +113,28 @@ bool MyEventReceiver::OnEvent(const SEvent &event)
 		return true;
 	}
 
+	if (event.EventType == EET_APPLICATION_EVENT &&
+			event.ApplicationEvent.EventType == EAET_DPI_CHANGED) {
+		// This is a fake setting so that we can use (de)registerChangedCallback
+		// not only to listen for gui/hud_scaling changes, but also for DPI changes.
+		g_settings->setU16("dpi_change_notifier",
+				g_settings->getU16("dpi_change_notifier") + 1);
+		return true;
+	}
+
 	// This is separate from other keyboard handling so that it also works in menus.
 	if (event.EventType == EET_KEY_INPUT_EVENT) {
 		const KeyPress keyCode(event.KeyInput);
 		if (keyCode == getKeySetting("keymap_fullscreen")) {
 			if (event.KeyInput.PressedDown && !fullscreen_is_down) {
-				bool fullscreen = RenderingEngine::get_raw_device()->isFullscreen();
-				g_settings->setBool("fullscreen", !fullscreen);
+				IrrlichtDevice *device = RenderingEngine::get_raw_device();
+
+				bool new_fullscreen = !device->isFullscreen();
+				// Only update the setting if toggling succeeds - it always fails
+				// if Minetest was built without SDL.
+				if (device->setFullscreen(new_fullscreen)) {
+					g_settings->setBool("fullscreen", new_fullscreen);
+				}
 			}
 			fullscreen_is_down = event.KeyInput.PressedDown;
 			return true;
