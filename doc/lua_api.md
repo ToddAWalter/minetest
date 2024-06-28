@@ -3902,6 +3902,7 @@ Operators
 ---------
 
 Operators can be used if all of the involved vectors have metatables:
+
 * `v1 == v2`:
     * Returns whether `v1` and `v2` are identical.
 * `-v`:
@@ -4007,8 +4008,9 @@ Helper functions
     * X1, Y1, ... Z2 are coordinates
     * `relative_to`: Optional. If set to a position, each coordinate
       can use the tilde notation for relative positions
-    * Tilde notation: "~": Relative coordinate
-                      "~<number>": Relative coordinate plus <number>
+    * Tilde notation
+      * `"~"`: Relative coordinate
+      * `"~<number>"`: Relative coordinate plus `<number>`
     * Example: `minetest.string_to_area("(1,2,3) (~5,~-5,~)", {x=10,y=10,z=10})`
       returns `{x=1,y=2,z=3}, {x=15,y=5,z=10}`
 * `minetest.formspec_escape(string)`: returns a string
@@ -4345,6 +4347,8 @@ A common medium value is 0.5, such that each octave has half the amplitude of
 the previous octave.
 This may need to be tuned when altering `lacunarity`; when doing so consider
 that a common medium value is 1 / lacunarity.
+
+Instead of `persistence`, the key `persist` may be used to the same effect.
 
 ### `lacunarity`
 
