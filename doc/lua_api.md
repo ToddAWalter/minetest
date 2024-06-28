@@ -3902,6 +3902,7 @@ Operators
 ---------
 
 Operators can be used if all of the involved vectors have metatables:
+
 * `v1 == v2`:
     * Returns whether `v1` and `v2` are identical.
 * `-v`:
@@ -4007,8 +4008,9 @@ Helper functions
     * X1, Y1, ... Z2 are coordinates
     * `relative_to`: Optional. If set to a position, each coordinate
       can use the tilde notation for relative positions
-    * Tilde notation: "~": Relative coordinate
-                      "~<number>": Relative coordinate plus <number>
+    * Tilde notation
+      * `"~"`: Relative coordinate
+      * `"~<number>"`: Relative coordinate plus `<number>`
     * Example: `minetest.string_to_area("(1,2,3) (~5,~-5,~)", {x=10,y=10,z=10})`
       returns `{x=1,y=2,z=3}, {x=15,y=5,z=10}`
 * `minetest.formspec_escape(string)`: returns a string
@@ -4345,6 +4347,8 @@ A common medium value is 0.5, such that each octave has half the amplitude of
 the previous octave.
 This may need to be tuned when altering `lacunarity`; when doing so consider
 that a common medium value is 1 / lacunarity.
+
+Instead of `persistence`, the key `persist` may be used to the same effect.
 
 ### `lacunarity`
 
@@ -5714,12 +5718,15 @@ Global callback registration functions
 Call these functions only at load time!
 
 * `minetest.register_globalstep(function(dtime))`
-    * Called every server step, usually interval of 0.1s
+    * Called every server step, usually interval of 0.1s.
+	* `dtime` is the time since last execution in seconds.
 * `minetest.register_on_mods_loaded(function())`
     * Called after mods have finished loading and before the media is cached or the
       aliases handled.
 * `minetest.register_on_shutdown(function())`
     * Called before server shutdown
+    * Players that were kicked by the shutdown procedure are still fully accessible
+     in `minetest.get_connected_players()`.
     * **Warning**: If the server terminates abnormally (i.e. crashes), the
       registered callbacks **will likely not be run**. Data should be saved at
       semi-frequent intervals as well as on server shutdown.
@@ -5796,6 +5803,7 @@ Call these functions only at load time!
     * `last_login`: The timestamp of the previous login, or nil if player is new
 * `minetest.register_on_leaveplayer(function(ObjectRef, timed_out))`
     * Called when a player leaves the game
+    * Does not get executed for connected players on shutdown.
     * `timed_out`: True for timeout, false for other reasons.
 * `minetest.register_on_authplayer(function(name, ip, is_success))`
     * Called when a client attempts to log into an account.
@@ -8232,7 +8240,11 @@ child will follow movement and rotation of that bone.
             * `"plain"`: Uses 0 textures, `base_color` used as both fog and sky.
             (default: `"regular"`)
         * `textures`: A table containing up to six textures in the following
-            order: Y+ (top), Y- (bottom), X- (west), X+ (east), Z+ (north), Z- (south).
+            order: Y+ (top), Y- (bottom), X+ (east), X- (west), Z- (south), Z+ (north).
+            The top and bottom textures are oriented in-line with the east (X+) face (the top edge of the
+            bottom texture and the bottom edge of the top texture touch the east face).
+            Some top and bottom textures expect to be aligned with the north face and will need to be rotated
+            by -90 and 90 degrees, respectively, to fit the eastward orientation.
         * `clouds`: Boolean for whether clouds appear. (default: `true`)
         * `sky_color`: A table used in `"regular"` type only, containing the
           following values (alpha is ignored):
