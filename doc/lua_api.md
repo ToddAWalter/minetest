@@ -4,6 +4,7 @@ Minetest Lua Modding API Reference
 * More information at <http://www.minetest.net/>
 * Developer Wiki: <http://dev.minetest.net/>
 * (Unofficial) Minetest Modding Book by rubenwardy: <https://rubenwardy.com/minetest_modding_book/>
+* Modding tools: <https://github.com/minetest/modtools>
 
 Introduction
 ------------
@@ -455,6 +456,10 @@ i.e. without gamma-correction.
 ### Texture overlaying
 
 Textures can be overlaid by putting a `^` between them.
+
+Warning: If the lower and upper pixels are both semi-transparent, this operation
+does *not* do alpha blending, and it is *not* associative. Otherwise it does
+alpha blending in srgb color space.
 
 Example:
 
@@ -2352,8 +2357,11 @@ for this group, and unable to dig the rating `1`, which is the toughest.
 Unless there is a matching group that enables digging otherwise.
 
 If the result digging time is 0, a delay of 0.15 seconds is added between
-digging nodes; If the player releases LMB after digging, this delay is set to 0,
+digging nodes. If the player releases LMB after digging, this delay is set to 0,
 i.e. players can more quickly click the nodes away instead of holding LMB.
+
+This extra delay is not applied in case of a digging time between 0 and 0.15,
+so a digging time of 0.01 is actually faster than a digging time of 0.
 
 ### Damage groups
 
@@ -3245,7 +3253,7 @@ Elements
 * Types: `text`, `image`, `color`, `indent`, `tree`
     * `text`:   show cell contents as text
     * `image`:  cell contents are an image index, use column options to define
-                images.
+                images. images are scaled down to fit the row height if necessary.
     * `color`:  cell contents are a ColorString and define color of following
                 cell.
     * `indent`: cell contents are a number and define indentation of following
@@ -3266,7 +3274,7 @@ Elements
         * `0=<value>` sets image for image index 0
         * `1=<value>` sets image for image index 1
         * `2=<value>` sets image for image index 2
-        * and so on; defined indices need not be contiguous empty or
+        * and so on; defined indices need not be contiguous. empty or
           non-numeric cells are treated as `0`.
     * `color` column options:
         * `span=<value>`: number of following columns to affect
@@ -4081,9 +4089,9 @@ Translations
 Texts can be translated client-side with the help of `minetest.translate` and
 translation files.
 
-Consider using the script `util/mod_translation_updater.py` in the Minetest
-repository to generate and update translation files automatically from the Lua
-sources. See `util/README_mod_translation_updater.md` for an explanation.
+Consider using the script `mod_translation_updater.py` in the Minetest
+[modtools](https://github.com/minetest/modtools) repository to generate and
+update translation files automatically from the Lua sources.
 
 Translating a string
 --------------------
@@ -6130,12 +6138,24 @@ Environment access
     * Items can be added also to unloaded and non-generated blocks.
 * `minetest.get_player_by_name(name)`: Get an `ObjectRef` to a player
     * Returns nothing in case of error (player offline, doesn't exist, ...).
-* `minetest.get_objects_inside_radius(pos, radius)`
-    * returns a list of ObjectRefs.
+* `minetest.get_objects_inside_radius(center, radius)`
+    * returns a list of ObjectRefs
     * `radius`: using a Euclidean metric
-* `minetest.get_objects_in_area(pos1, pos2)`
-    * returns a list of ObjectRefs.
-    * `pos1` and `pos2` are the min and max positions of the area to search.
+    * **Warning**: Any kind of interaction with the environment or other APIs
+      can cause later objects in the list to become invalid while you're iterating it.
+      (e.g. punching an entity removes its children)
+      It is recommended to use `minetest.objects_inside_radius` instead, which
+      transparently takes care of this possibility.
+* `minetest.objects_inside_radius(center, radius)`
+    * returns an iterator of valid objects
+    * example: `for obj in minetest.objects_inside_radius(center, radius) do obj:punch(...) end`
+* `minetest.get_objects_in_area(min_pos, max_pos)`
+    * returns a list of ObjectRefs
+    * `min_pos` and `max_pos` are the min and max positions of the area to search
+    * **Warning**: The same warning as for `minetest.get_objects_inside_radius` applies.
+      Use `minetest.objects_in_area` instead to iterate only valid objects.
+* `minetest.objects_in_area(min_pos, max_pos)`
+	* returns an iterator of valid objects
 * `minetest.set_timeofday(val)`: set time of day
     * `val` is between `0` and `1`; `0` for midnight, `0.5` for midday
 * `minetest.get_timeofday()`: get time of day
@@ -6727,6 +6747,7 @@ This allows you easy interoperability for delegating work to jobs.
 ### List of APIs available in an async environment
 
 Classes:
+
 * `AreaStore`
 * `ItemStack`
 * `PerlinNoise`
@@ -6740,17 +6761,20 @@ Classes:
 * `Settings`
 
 Class instances that can be transferred between environments:
+
 * `ItemStack`
 * `PerlinNoise`
 * `PerlinNoiseMap`
 * `VoxelManip`
 
 Functions:
+
 * Standalone helpers such as logging, filesystem, encoding,
   hashing or compression APIs
 * `minetest.register_async_metatable` (see above)
 
 Variables:
+
 * `minetest.settings`
 * `minetest.registered_items`, `registered_nodes`, `registered_tools`,
   `registered_craftitems` and `registered_aliases`
@@ -6802,6 +6826,7 @@ does not have a global step or timer.
 ### List of APIs available in the mapgen env
 
 Classes:
+
 * `AreaStore`
 * `ItemStack`
 * `PerlinNoise`
@@ -6815,6 +6840,7 @@ Classes:
 * `Settings`
 
 Functions:
+
 * Standalone helpers such as logging, filesystem, encoding,
   hashing or compression APIs
 * `minetest.get_biome_id`, `get_biome_name`, `get_heat`, `get_humidity`,
@@ -6825,6 +6851,7 @@ Functions:
     * these only operate on the current chunk (if inside a callback)
 
 Variables:
+
 * `minetest.settings`
 * `minetest.registered_items`, `registered_nodes`, `registered_tools`,
   `registered_craftitems` and `registered_aliases`
@@ -7797,12 +7824,17 @@ When you receive an `ObjectRef` as a callback argument or from another API
 function, it is possible to store the reference somewhere and keep it around.
 It will keep functioning until the object is unloaded or removed.
 
-However, doing this is **NOT** recommended as there is (intentionally) no method
-to test if a previously acquired `ObjectRef` is still valid.
-Instead, `ObjectRefs` should be "let go" of as soon as control is returned from
-Lua back to the engine.
+However, doing this is **NOT** recommended - `ObjectRefs` should be "let go"
+of as soon as control is returned from Lua back to the engine.
+
 Doing so is much less error-prone and you will never need to wonder if the
 object you are working with still exists.
+
+If this is not feasible, you can test whether an `ObjectRef` is still valid
+via `object:is_valid()`.
+
+Getters may be called for invalid objects and will return nothing then.
+All other methods should not be called on invalid objects.
 
 ### Attachments
 
@@ -7822,6 +7854,8 @@ child will follow movement and rotation of that bone.
 
 ### Methods
 
+* `is_valid()`: returns whether the object is valid.
+   * See "Advice on handling `ObjectRefs`" above.
 * `get_pos()`: returns position as vector `{x=num, y=num, z=num}`
 * `set_pos(pos)`:
     * Sets the position of the object.
@@ -10654,7 +10688,10 @@ Used by `minetest.add_particle`.
     texture = "image.png",
     -- The texture of the particle
     -- v5.6.0 and later: also supports the table format described in the
-    -- following section
+    -- following section, but due to a bug this did not take effect
+    -- (beyond the texture name).
+    -- v5.9.0 and later: fixes the bug.
+    -- Note: "texture.animation" is ignored here. Use "animation" below instead.
 
     playername = "singleplayer",
     -- Optional, if specified spawns particle only on the player's client
@@ -10679,6 +10716,11 @@ Used by `minetest.add_particle`.
 
     drag = {x=0, y=0, z=0},
     -- v5.6.0 and later: Optional drag value, consult the following section
+    -- Note: Only a vector is supported here. Alternative forms like a single
+    -- number are not supported.
+
+    jitter = {min = ..., max = ..., bias = 0},
+    -- v5.6.0 and later: Optional jitter range, consult the following section
 
     bounce = {min = ..., max = ..., bias = 0},
     -- v5.6.0 and later: Optional bounce range, consult the following section
@@ -10704,7 +10746,10 @@ will be ignored.
 
 ```lua
 {
-    -- Common fields (same name and meaning in both new and legacy syntax)
+    -------------------
+    -- Common fields --
+    -------------------
+    -- (same name and meaning in both new and legacy syntax)
 
     amount = 1,
     -- Number of particles spawned over the time period `time`.
@@ -10736,6 +10781,8 @@ will be ignored.
 
     texture = "image.png",
     -- The texture of the particle
+    -- v5.6.0 and later: also supports the table format described in the
+    -- following section.
 
     playername = "singleplayer",
     -- Optional, if specified spawns particles only on the player's client
@@ -10761,7 +10808,9 @@ will be ignored.
     -- particle texture is picked.
     -- Otherwise, the default behavior is used. (currently: any random tile)
 
-    -- Legacy definition fields
+    -------------------
+    -- Legacy fields --
+    -------------------
 
     minpos = {x=0, y=0, z=0},
     maxpos = {x=0, y=0, z=0},
@@ -10889,32 +10938,46 @@ All of the properties that can be defined in this way are listed in the next
 section, along with the datatypes they accept.
 
 #### List of particlespawner properties
-All of the properties in this list can be animated with `*_tween` tables
-unless otherwise specified. For example, `jitter` can be tweened by setting
-a `jitter_tween` table instead of (or in addition to) a `jitter` table/value.
+
+All properties in this list of type "vec3 range", "float range" or "vec3" can
+be animated with `*_tween` tables. For example, `jitter` can be tweened by
+setting a `jitter_tween` table instead of (or in addition to) a `jitter`
+table/value.
+
 In this section, a float range is a table defined as so: { min = A, max = B }
 A and B are your supplemented values. For a vec3 range this means they are vectors.
 Types used are defined in the previous section.
 
 * vec3 range `pos`: the position at which particles can appear
+
 * vec3 range `vel`: the initial velocity of the particle
+
 * vec3 range `acc`: the direction and speed with which the particle
   accelerates
+
+* vec3 range `size`: scales the visual size of the particle texture.
+  if `node` is set, this can be set to 0 to spawn randomly-sized particles
+  (just like actual node dig particles).
+
 * vec3 range `jitter`: offsets the velocity of each particle by a random
   amount within the specified range each frame. used to create Brownian motion.
+
 * vec3 range `drag`: the amount by which absolute particle velocity along
   each axis is decreased per second.  a value of 1.0 means that the particle
   will be slowed to a stop over the space of a second; a value of -1.0 means
   that the particle speed will be doubled every second. to avoid interfering
   with gravity provided by `acc`, a drag vector like `vector.new(1,0,1)` can
   be used instead of a uniform value.
+
 * float range `bounce`: how bouncy the particles are when `collisiondetection`
   is turned on. values less than or equal to `0` turn off particle bounce;
   `1` makes the particles bounce without losing any velocity, and `2` makes
   them double their velocity with every bounce.  `bounce` is not bounded but
   values much larger than `1.0` probably aren't very useful.
+
 * float range `exptime`: the number of seconds after which the particle
   disappears.
+
 * table `attract`: sets the birth orientation of particles relative to various
   shapes defined in world coordinate space. this is an alternative means of
   setting the velocity which allows particles to emerge from or enter into
@@ -10922,8 +10985,10 @@ Types used are defined in the previous section.
   velocity values within a range. the velocity calculated by this method will
   be **added** to that specified by `vel` if `vel` is also set, so in most
   cases **`vel` should be set to 0**. `attract` has the fields:
+
   * string `kind`: selects the kind of shape towards which the particles will
     be oriented. it must have one of the following values:
+
     * `"none"`: no attractor is set and the `attractor` table is ignored
     * `"point"`: the particles are attracted to a specific point in space.
       use this also if you want a sphere-like effect, in combination with
@@ -10934,25 +10999,32 @@ Types used are defined in the previous section.
     * `"plane"`: the particles are attracted to an (infinite) plane on whose
       surface `origin` designates a point in world coordinate space. use this
       for e.g. particles entering or emerging from a portal.
+
   * float range `strength`: the speed with which particles will move towards
     `attractor`. If negative, the particles will instead move away from that
     point.
+
   * vec3 `origin`: the origin point of the shape towards which particles will
     initially be oriented. functions as an offset if `origin_attached` is also
     set.
+
   * vec3 `direction`: sets the direction in which the attractor shape faces. for
     lines, this sets the angle of the line; e.g. a vector of (0,1,0) will
     create a vertical line that passes through `origin`. for planes, `direction`
     is the surface normal of an infinite plane on whose surface `origin` is
     a point. functions as an offset if `direction_attached` is also set.
-  * entity `origin_attached`: allows the origin to be specified as an offset
+
+  * ObjectRef `origin_attached`: allows the origin to be specified as an offset
     from the position of an entity rather than a coordinate in world space.
-  * entity `direction_attached`: allows the direction to be specified as an offset
-    from the position of an entity rather than a coordinate in world space.
+
+  * ObjectRef `direction_attached`: allows the direction to be specified as an
+    offset from the position of an entity rather than a coordinate in world space.
+
   * bool `die_on_contact`: if true, the particles' lifetimes are adjusted so
     that they will die as they cross the attractor threshold. this behavior
     is the default but is undesirable for some kinds of animations; set it to
     false to allow particles to live out their natural lives.
+
 * vec3 range `radius`: if set, particles will be arranged in a sphere around
   `pos`. A constant can be used to create a spherical shell of particles, a
   vector to create an ovoid shell, and a range to create a volume; e.g.
@@ -10964,9 +11036,10 @@ Types used are defined in the previous section.
 
 ### Textures
 
-In versions before v5.6.0, particlespawner textures could only be specified as a single
-texture string. After v5.6.0, textures can now be specified as a table as well. This
-table contains options that allow simple animations to be applied to the texture.
+In versions before v5.6.0, particle/particlespawner textures could only be
+specified as a single texture string. After v5.6.0, textures can now be
+specified as a table as well. This table contains options that allow simple
+animations to be applied to the texture.
 
 ```lua
 texture = {
@@ -11021,18 +11094,18 @@ texture = {
 }
 ```
 
-Instead of setting a single texture definition, it is also possible to set a
-`texpool` property. A `texpool` consists of a list of possible particle textures.
-Every time a particle is spawned, the engine will pick a texture at random from
-the `texpool` and assign it as that particle's texture. You can also specify a
-`texture` in addition to a `texpool`; the `texture` value will be ignored on newer
-clients but will be sent to older (pre-v5.6.0) clients that do not implement
-texpools.
+For particlespawners, it is also possible to set the `texpool` property instead
+of a single texture definition. A `texpool` consists of a list of possible
+particle textures. Every time a particle is spawned, the engine will pick a
+texture at random from the `texpool` and assign it as that particle's texture.
+You can also specify a `texture` in addition to a `texpool`; the `texture`
+value will be ignored on newer clients but will be sent to older (pre-v5.6.0)
+clients that do not implement texpools.
 
 ```lua
 texpool = {
     "mymod_particle_texture.png";
-    { name = "mymod_spark.png", fade = "out" },
+    { name = "mymod_spark.png", alpha_tween = {1, 0} },
     {
       name = "mymod_dust.png",
       alpha = 0.3,
